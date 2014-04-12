@@ -12,6 +12,7 @@ import com.vmware.vim25.mo.InventoryNavigator;
 import com.vmware.vim25.mo.ManagedEntity;
 import com.vmware.vim25.mo.ServiceInstance;
 import com.vmware.vim25.mo.Task;
+import com.vmware.vim25.mo.VirtualMachine;
 import com.vmware.vim25.mo.VirtualMachineSnapshot;
 
 public class Main {
@@ -35,19 +36,19 @@ public class Main {
 			}
 		}
 		JC_ubuntu = Methods.initializeVmByName(si, "Team16_Ubuntu_v12_JC");
-		System.out.println(JC_ubuntu.get_vm());
-		Methods.createPwrAlarm(JC_ubuntu, JC_ubuntu.get_name() + "Alarm_JC", "keep vm power on.");
-
-		//the monitor thread
-		infoUpdate iu = new infoUpdate(JC_ubuntu);
-		Thread update = new Thread(iu);
-		update.start();
-
-		//the Heartbeat and snapshot thread
-		Thread hb = new Thread(new heartbeat(JC_ubuntu));
-		hb.start();
-		Thread ssThread = new Thread(new snapshotCache(JC_ubuntu));
-		ssThread.start();
+//		System.out.println(JC_ubuntu.get_vm());
+//		Methods.createPwrAlarm(JC_ubuntu, JC_ubuntu.get_name() + "Alarm_JC", "keep vm power on.");
+//
+//		//the monitor thread
+//		infoUpdate iu = new infoUpdate(JC_ubuntu);
+//		Thread update = new Thread(iu);
+//		update.start();
+//
+//		//the Heartbeat and snapshot thread
+//		Thread hb = new Thread(new heartbeat(JC_ubuntu));
+//		hb.start();
+//		Thread ssThread = new Thread(new snapshotCache(JC_ubuntu));
+//		ssThread.start();
 
 		System.out.println("Done");
 
@@ -227,8 +228,8 @@ public class Main {
 				}
 			} else {
 				/*
-				 * If the vHost is failed, try to reconnect to vCenter. If host
-				 * is still dead, go over the Host list and find available one
+				 * If the vHost is failed, try to reconnect to the vHost. 
+				 * If vHost is still dead, revert Host to latest snapshot
 				 */
 				try {
 					HostConnectSpec hcs = new HostConnectSpec();
@@ -241,45 +242,41 @@ public class Main {
 						Thread hb = new Thread(new heartbeat(vm));
 						hb.start();
 						System.out.println("Host :" + hs.getName() + " reconnect sucessfully!");
-						return;
+					}
+					else {
+						//if reconnection failed, revert Host to latest snapshot
+						ServiceInstance hostSi = new ServiceInstance(new URL(setting.vCenterAdminURL), setting.vCenterUser,
+								setting.vCenterPassword, true);
+						String[] tmp = hostIP.split(".");
+						String last2Ip = tmp[2]+"."+tmp[3];
+						vmObjec VMhost = Methods.initializeVmByName(hostSi, "t16-vHost01-cum3-lab1 _."+last2Ip+" _PwrOff_byAdmin2");
+						VirtualMachineSnapshot vmsnap = Methods.getSnapshotInTree(VMhost.get_vm(), null);
+						if (vmsnap != null) {
+							Task task = vmsnap.revertToSnapshot_Task(null);
+							if (task.waitForMe() == Task.SUCCESS) {
+								System.out.println("Reverted to snapshot!\nPower on the vHost...");
+								Task pwOn = VMhost.get_vm().powerOnVM_Task(null);
+							      if(pwOn.waitForMe()==Task.SUCCESS)
+							      {
+							    	 Thread hb = new Thread(new heartbeat(vm));
+									hb.start();
+							        System.out.println(VMhost.get_name() + " powered on");
+							      }
+							      else {
+							    	  System.out.println("Power on task failed!");
+							      }
+							}else {
+								System.out.println("Reverted latest snapshot on vHost failed!");
+							}
+							
+						}
+						hostSi.getServerConnection().logout();					
 					}
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
-				while (hostIndex <= hostsList.length) {
-					if (hs.getName() != hostsList[hostIndex].getName()
-							&& Methods.IsReachable(hostsList[hostIndex].getName())) {
-						/*
-						 * If alternative is available, do the cold migration
-						 * and power on
-						 */
-						Methods.cloneVM(vm.get_name(), templateList[0], hostsList[hostIndex].getName());
-						isAlternative = true;
-						break;
-					}
-					hostIndex++;
-				}
-				if (!isAlternative) {
-					// if cannot fixed host, just remove it and add a new one
-					try {
-						hs.destroy_Task();
-						HostConnectSpec hcs = new HostConnectSpec();
-						hcs.setHostName(hostIP);
-						hcs.setUserName(setting.vHostUser);
-						hcs.setPassword(setting.vCenterPassword);
-						Task recon = hs.reconnectHost_Task(hcs);
-						System.out.println("Try to reconnect host...");
-						if (recon.waitForMe() == Task.SUCCESS) {
-							Methods.cloneVM(vm.get_name(), templateList[0], hostIP);
-							Thread hb = new Thread(new heartbeat(vm));
-							hb.start();
-							System.out.println("Host :" + hs.getName() + " readd sucessfully!");
-							return;
-						}
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
-				}
+				
+
 
 			}
 		} catch (Exception e) {

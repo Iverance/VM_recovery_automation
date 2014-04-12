@@ -151,8 +151,18 @@ public class Methods {
 	}
 
 	static VirtualMachineSnapshot getSnapshotInTree(VirtualMachine vm, String snapName) {
-		if (vm == null || snapName == null) {
+		if (vm == null) {
 			return null;
+		}
+		
+		if(snapName == null) {
+			VirtualMachineSnapshotTree[] snapTree = vm.getSnapshot().getRootSnapshotList();
+			if (snapTree != null) {
+				ManagedObjectReference mor = findLatestSnapshotInTree(snapTree);
+				if (mor != null) {
+					return new VirtualMachineSnapshot(vm.getServerConnection(), mor);
+				}
+			}
 		}
 
 		VirtualMachineSnapshotTree[] snapTree = vm.getSnapshot().getRootSnapshotList();
@@ -177,6 +187,24 @@ public class Methods {
 					if (mor != null) {
 						return mor;
 					}
+				}
+			}
+		}
+		return null;
+	}
+	
+	static ManagedObjectReference findLatestSnapshotInTree(VirtualMachineSnapshotTree[] snapTree) {
+		for (int i = 0; i < snapTree.length; i++) {
+			VirtualMachineSnapshotTree node = snapTree[i];
+			VirtualMachineSnapshotTree[] childTree = node.getChildSnapshotList();
+			if(childTree == null) {
+				System.out.print("find latest snapshot: "+node.getName());
+				return node.getSnapshot();
+			}
+			else {
+				ManagedObjectReference mor = findLatestSnapshotInTree(childTree);
+				if (mor != null) {
+					return mor;
 				}
 			}
 		}
