@@ -37,18 +37,18 @@ public class Main {
 		}
 		JC_ubuntu = Methods.initializeVmByName(si, "Team16_Ubuntu_v12_JC");
 //		System.out.println(JC_ubuntu.get_vm());
-//		Methods.createPwrAlarm(JC_ubuntu, JC_ubuntu.get_name() + "Alarm_JC", "keep vm power on.");
+		Methods.createPwrAlarm(JC_ubuntu, JC_ubuntu.get_name() + "Alarm_JC", "keep vm power on.");
 //
 //		//the monitor thread
 //		infoUpdate iu = new infoUpdate(JC_ubuntu);
 //		Thread update = new Thread(iu);
 //		update.start();
 //
-//		//the Heartbeat and snapshot thread
-//		Thread hb = new Thread(new heartbeat(JC_ubuntu));
-//		hb.start();
-//		Thread ssThread = new Thread(new snapshotCache(JC_ubuntu));
-//		ssThread.start();
+		//the Heartbeat and snapshot thread
+		Thread hb = new Thread(new heartbeat(JC_ubuntu));
+		hb.start();
+		Thread ssThread = new Thread(new snapshotCache(JC_ubuntu));
+		ssThread.start();
 
 		System.out.println("Done");
 
@@ -132,7 +132,7 @@ public class Main {
 					}
 
 					Thread.currentThread();
-					Thread.sleep(10);
+					Thread.sleep(1000);
 
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
@@ -199,31 +199,42 @@ public class Main {
 			// if VM is failed, check the vHost is alive or not.
 			if (Methods.IsReachable(hs.getName())) {
 				System.out.println("Host is reachable...");
-				try {
-					HostConnectSpec hcs = new HostConnectSpec();
-					hcs.setHostName(hostIP);
-					hcs.setUserName(setting.vHostUser);
-					hcs.setPassword(setting.vCenterPassword);
-					Task recon = hs.reconnectHost_Task(hcs);
-					// System.out.println("Try to reconnect host...");
-					if (recon.waitForMe() == Task.SUCCESS) {
-						Thread hb = new Thread(new heartbeat(vm));
-						hb.start();
-						System.out.println("Host :" + hs.getName() + " reconnect sucessfully!");
-					}
-				} catch (Exception e) {
-					// e.printStackTrace();
-				}
+//				try {
+//					HostConnectSpec hcs = new HostConnectSpec();
+//					hcs.setHostName(hostIP);
+//					hcs.setUserName(setting.vHostUser);
+//					hcs.setPassword(setting.vCenterPassword);
+//					Task recon = hs.reconnectHost_Task(hcs);
+//					// System.out.println("Try to reconnect host...");
+//					if (recon.waitForMe() == Task.SUCCESS) {
+//						Thread hb = new Thread(new heartbeat(vm));
+//						hb.start();
+//						System.out.println("Host :" + hs.getName() + " reconnect sucessfully!");
+//					}
+//				} catch (Exception e) {
+//					
+//					e.printStackTrace();
+//				}
 				/*
 				 * If the vHost is alive, revert the VM to the latest snapshot
 				 */
-				VirtualMachineSnapshot vmsnap = Methods.getSnapshotInTree(vm.get_vm(), vm.get_LatestSanpshotName());
+				VirtualMachineSnapshot vmsnap = Methods.getSnapshotInTree(vm.get_vm(), null);
 				if (vmsnap != null) {
+					System.out.println("Latest Sanpshot is found...");
 					Task task = vmsnap.revertToSnapshot_Task(null);
 					if (task.waitForMe() == Task.SUCCESS) {
-						Thread hb = new Thread(new heartbeat(vm));
-						hb.start();
 						System.out.println("Reverted to snapshot:" + vm.get_LatestSanpshotName());
+						Thread.sleep(30000);
+				    	Thread hb = new Thread(new heartbeat(vm));
+				    	hb.start();
+//						Task pwOn_task = vm.get_vm().powerOnVM_Task(null);
+//						System.out.println("power on "+vm.get_name() + " ...");
+//					      if(task.waitForMe()==Task.SUCCESS) {
+//					    	  System.out.println(vm.get_name() + " powered on");
+//					    	  Thread.sleep(5000);
+//					    	  Thread hb = new Thread(new heartbeat(vm));
+//					    	  hb.start();
+//					      }
 					}
 				}
 			} else {
@@ -258,9 +269,10 @@ public class Main {
 								Task pwOn = VMhost.get_vm().powerOnVM_Task(null);
 							      if(pwOn.waitForMe()==Task.SUCCESS)
 							      {
-							    	 Thread hb = new Thread(new heartbeat(vm));
+							    	System.out.println(VMhost.get_name() + " powered on");
+							    	Thread hb = new Thread(new heartbeat(vm));
+							    	Thread.sleep(5000);
 									hb.start();
-							        System.out.println(VMhost.get_name() + " powered on");
 							      }
 							      else {
 							    	  System.out.println("Power on task failed!");
